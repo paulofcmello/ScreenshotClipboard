@@ -1,116 +1,157 @@
 # ScreenshotClipboard
 
-A small native macOS background utility. Keep using **⌘⇧3**, **⌘⇧4**, and **⌘⇧4, Space**: macOS saves the screenshot normally; this utility copies the completed image so you can paste it with **⌘V**.
+**Save screenshots as files and copy them to the clipboard automatically.**
 
-No shortcut interception, Accessibility permission, screen capture API, network access, third-party runtime, menu bar icon, or Dock icon. Requires macOS 13 or newer and Apple's Command Line Tools to build. Tested with Swift 6.0.3 on Apple Silicon / macOS 26.5.1.
+Keep using **⌘⇧3** (full screen), **⌘⇧4** (region), and **⌘⇧4, Space** (window). macOS saves the screenshot; ScreenshotClipboard copies the completed image so you can paste it with **⌘V**. Your screenshot files stay where they are.
 
-The installed utility is a background `.app` bundle. A per-user LaunchAgent starts it immediately and whenever you log in; there is no app window to keep open.
+This is a small native Swift background app with no window, Dock icon, or menu bar icon. It starts after login, works locally, and does not upload images or keep a clipboard history. It uses filesystem events rather than polling and does not intercept shortcuts.
 
-## Install on this Mac
+## Requirements
 
-Run this in **Terminal** under your usual login (no sudo):
+- **macOS 13 or newer.** Linux and Windows are not supported.
+- **Apple's Command Line Tools**, including Git and the Swift compiler. Full Xcode also works; Homebrew and third-party packages are not required.
+- A normal logged-in macOS desktop session. Install as your usual user, **without `sudo`**.
+
+If the Command Line Tools are missing, open **Terminal** and run:
+
+```sh
+xcode-select --install
+```
+
+Finish the installation dialog before continuing. You can check the selected compiler with `xcrun swiftc --version`. The project builds for the current Mac's architecture; the verified environment is Apple Silicon with Swift 6.0.3 on macOS 26.5.1. Intel and older supported macOS versions have not been verified. See [validation results](VALIDATION.md).
+
+## Clone and install
+
+Run in **Terminal**:
 
 ```sh
 git clone https://github.com/paulofcmello/ScreenshotClipboard.git
 cd ScreenshotClipboard
-zsh scripts/setup.sh
+./install.sh
 ```
 
-This builds and signs the utility, runs verification using a separate test clipboard, installs an agent, and starts it immediately and after login. Your current general clipboard is not used by the automated tests. Setup sets native screenshot output to **PNG files on Desktop**, backing up the previous target, format, and location. On this Mac the original target was `clipboard`, which would prevent a file watcher from seeing captures. It briefly restarts SystemUIServer to refresh screenshot preferences.
+If the repository is private, GitHub access is required to clone it. No GitHub login is needed for a public repository. You can also download and extract the repository ZIP, open Terminal in the extracted folder, and run `zsh install.sh`. The installer resolves paths relative to itself, so the checkout can live in any folder, including one with spaces.
 
-If you want to retain your current custom screenshot folder instead of switching to Desktop:
+The installer:
+
+1. Builds the executable locally and applies an ad-hoc code signature; no developer account is needed.
+2. Runs the integration tests using a separate test clipboard, preserving your general clipboard.
+3. Backs up the original screenshot destination, image format, and save folder.
+4. Sets screenshot output to **PNG files on Desktop**.
+5. Installs a background app and per-user LaunchAgent, then starts it immediately and after login.
+
+It briefly restarts SystemUIServer to refresh screenshot settings. It leaves the native floating thumbnail setting as you configured it. `zsh scripts/setup.sh` remains an equivalent installation command; `./install.sh --help` shows the installer options.
+
+To **keep your existing custom screenshot folder**, use this instead of the default installation command:
 
 ```sh
-zsh scripts/setup.sh --keep-location
+./install.sh --keep-location
 ```
 
-This option preserves the configured folder, so files will be saved there rather than Desktop. The utility watches both Desktop and the configured folder. Ordinary install fulfills the Desktop requirement. Do not choose **Clipboard**, Mail, or another app as the native capture destination: macOS must produce a file.
+This preserves the configured save folder while still selecting file output and PNG format. The app watches Desktop and the configured folder. The folder must exist and be readable. In **⌘⇧5 → Options**, keep a file save destination selected: **Clipboard**, Mail, and other app destinations do not produce the files this utility needs.
 
-Installation creates:
+## Permissions and first use
 
-- `~/Library/Application Support/ScreenshotClipboard/ScreenshotClipboard.app`
-- `~/Library/Application Support/ScreenshotClipboard/screenshot-preferences.plist` (original settings)
-- `~/Library/Application Support/ScreenshotClipboard/applied-preferences.plist`
-- `~/Library/Application Support/ScreenshotClipboard/error.log`
-- `~/Library/LaunchAgents/local.screenshot-clipboard.plist`
+Allow **Desktop** access if macOS prompts. If access was denied, check **System Settings → Privacy & Security → Files and Folders** for ScreenshotClipboard or the process macOS names in its prompt. A custom save folder can require access too. If macOS prompts for clipboard access, allow it.
 
-If macOS requests Desktop access, allow it. Check **System Settings → Privacy & Security → Files and Folders** if access is denied. A new custom folder can require access too. Full Disk Access is not normally needed. The utility does not request Screen Recording or Accessibility. macOS may separately control clipboard access; allow access if macOS presents that setting.
+The background utility does not require Accessibility or Screen Recording access. Full Disk Access is not normally needed. Tests optionally exercise native screen capture only if the test host already has Screen Recording permission; they never request it.
 
-Restricted coding sessions may be unable to access the pasteboard service or install into your Library. If that happens, run setup in Terminal. Installation and real isolated pasteboard access were verified on the development Mac. See [VALIDATION.md](VALIDATION.md) for measured results and their limits.
+After installation:
 
-## Verify normal use
+1. Press **⌘⇧4** and select a region.
+2. Wait for the floating thumbnail to disappear and the PNG file to appear on Desktop (or your retained save folder).
+3. Paste into Notes or a message draft with **⌘V**. You should get an image, and the saved PNG should remain in the folder.
 
-1. Press **⌘⇧3**. Wait for the native floating thumbnail to disappear and the PNG to appear on Desktop, then paste into Notes or a message draft.
-2. Repeat with **⌘⇧4** (region) and **⌘⇧4, Space** (window). Confirm that the PNG remains on Desktop and the pasted item is an image.
-3. Take two quick screenshots; the clipboard should contain the latest completed capture. With multiple monitors, macOS produces separate files; the clipboard ends up with the latest capture file, not a stitched image or history of all displays.
-4. Copy some text, then save or drag an ordinary PNG (such as an exported drawing) onto Desktop. Pasting should still produce your text. Only newly created images marked as screenshots should replace the clipboard. Files present at startup are never copied.
-5. Log out and back in, then repeat. Check status with the command below.
+Repeat with the full-screen and window shortcuts. Two quick screenshots should leave the latest completed capture on the clipboard. An ordinary PNG added to the folder should leave your clipboard alone. Existing files are ignored when the app starts. After your next logout/login, repeat the test to confirm automatic startup.
 
-The floating thumbnail can delay the file save for several seconds. This is native behavior and is preserved. Clipboard latency is measured **after the saved image is complete**, not from pressing the shortcut. For earlier file creation, optionally turn off **Show Floating Thumbnail** in **⌘⇧5 → Options**. On macOS Tahoe, choose **SDR (Most Compatible)** if HDR capture would produce HEIF files; this utility intentionally accepts PNG only.
+The floating thumbnail can delay saving for several seconds. For earlier file creation, optionally turn off **Show Floating Thumbnail** in **⌘⇧5 → Options**. Copying starts after macOS saves the image. On macOS Tahoe, use **SDR (Most Compatible)** if HDR capture would produce HEIF files; this utility accepts PNG only.
 
-## Controls
+## Status, pause, and removal
 
-From this project directory:
+From the checkout, run the command you need:
+
+| Command | Effect |
+| --- | --- |
+| `./build/screenshot-clipboard --status` | Show launchd status and the configured watched folders. Look for `state = running`. |
+| `./build/screenshot-clipboard --disable` | Stop automatic copying, including after login. |
+| `./build/screenshot-clipboard --enable` | Resume copying and automatic startup. |
+| `./build/screenshot-clipboard --uninstall` | Stop and remove the installed app and agent, and restore owned screenshot settings where possible. |
+
+Pausing leaves screenshot file saving enabled. Uninstall restores a screenshot preference only if it still matches the value the installer set, preserving later changes you made. It does not delete screenshots or the checkout, or change the clipboard. The empty support folder may remain.
+
+The installed app is independent of the checkout: you can move or delete the cloned folder after setup. To use a control command without the checkout, invoke the installed executable, for example:
 
 ```sh
-./build/screenshot-clipboard --status
-./build/screenshot-clipboard --disable
-./build/screenshot-clipboard --enable
-./build/screenshot-clipboard --uninstall
+"$HOME/Library/Application Support/ScreenshotClipboard/ScreenshotClipboard.app/Contents/MacOS/screenshot-clipboard" --status
 ```
 
-Disable persists across login. It leaves normal screenshot saving enabled. Uninstall stops the agent, removes only the utility's app/configuration/log, and restores original screenshot settings **only where they still match values set by the installer**. It does not delete screenshots, touch image folders, change your clipboard, or delete the project. The empty support folder may remain. These commands also work using the installed executable:
+Replace `--status` with `--disable`, `--enable`, or `--uninstall` as needed.
+
+## Update
+
+From your existing checkout:
 
 ```sh
-"$HOME/Library/Application Support/ScreenshotClipboard/ScreenshotClipboard.app/Contents/MacOS/screenshot-clipboard" --disable
+git pull --ff-only
+./install.sh --keep-location
 ```
 
-No executable bit is needed on the `.sh` files when run with `zsh` as shown.
+This rebuilds, tests, replaces the installed app, and restarts the agent. It preserves the existing screenshot save folder and the original preference backup. Use `./install.sh` without the option if you want to reset the save folder to Desktop. Reinstalling enables the agent even if you previously paused it. If you deleted the checkout, clone it again and use the same installation command.
 
-## Architecture and guarantees
+## Troubleshooting
 
-`DispatchSource` uses macOS vnode notifications (kqueue) for directory creation/rename events and per-candidate write/extend/attribute events. There is no screenshot polling, FSEvents batching, readiness sleep, Spotlight indexing dependency, or shortcut replacement. New files are checked immediately. Incomplete files are checked again only when the filesystem reports a change. A single one-shot cleanup task releases unused candidate descriptors after approximately 30–60 seconds; it never delays copying. At most 128 candidates are watched concurrently.
+| Symptom | What to check |
+| --- | --- |
+| `git` or `swiftc` is unavailable, or `xcrun` reports a missing tool | Run `xcode-select --install`, complete installation, and retry. The installer checks for macOS 13+ and a selected Swift compiler before building. |
+| `Permission denied` when running `./install.sh` | Use `zsh install.sh`; it does not require the executable bit to be preserved. |
+| Cannot save inside `~/Library/Application Support`, or clipboard service unavailable in a coding session | Run setup directly in macOS Terminal under your normal login. A restricted agent sandbox can block Library writes and desktop services independently of macOS privacy permissions. `sudo` is not the fix. |
+| `Repository not found` when cloning | Check the repository URL and your GitHub access if it is private. If GitHub itself cannot be reached, check the network connection. |
+| Screenshots copy only after several seconds | Wait for the native floating thumbnail to disappear, or disable it in screenshot Options. The app cannot copy a file before macOS saves it. |
+| Screenshots never copy | Confirm PNG output, a file save destination, folder access, and a running agent. Check the log below. HEIF/JPEG and clipboard-only capture are not supported. |
+| Agent keeps exiting | Restore any removed or renamed watched folder, or choose an existing save folder. launchd retries with a 10-second throttle. |
+| `--status` says the service was not found | The agent may be paused or not installed. Run `--enable` after a successful install, or rerun the installer. The status command can exit successfully even when launchd reports a missing service; read its output. |
 
-Recognition requires the binary plist extended attribute `com.apple.metadata:kMDItemIsScreenCapture` to be true. Filenames and system language do not matter. Existing files, old files moved into the folder, symlinks, ordinary PNGs, and corrupt/incomplete PNGs are ignored. A screenshot copied by another app can retain this metadata; a newly created copy with fresh timestamps cannot always be distinguished from a native capture without observing the capture process. This utility deliberately avoids that extra access.
+Read recent errors with:
 
-Before publication, the utility reads an immutable snapshot through a file descriptor, verifies PNG framing and every chunk CRC through Apple's system zlib, requires the terminal IEND chunk, eagerly decodes through ImageIO, prepares PNG and TIFF image representations, and checks file identity, size, modification time, and change time again. A concurrent change rejects the snapshot. Original PNG bytes (including Retina pixels, alpha, DPI and color metadata) are placed on `NSPasteboard`, plus TIFF for broader app support. No path/file URL is placed on the clipboard. Files are never modified by the watcher.
+```sh
+tail -n 50 "$HOME/Library/Application Support/ScreenshotClipboard/error.log"
+```
 
-Captures are handled on one serial main queue. A newer capture cannot be replaced by an older candidate that finishes late. Every successful capture replaces the previous clipboard image, as with normal screenshot copying; multi-monitor files are handled individually and the last one wins. There is no screenshot history.
+Normal background operation does not accumulate timing logs or record screenshot filenames or image contents. If you need help, include your macOS and Swift versions, the installer or status output, and relevant error log lines in a [GitHub issue](https://github.com/paulofcmello/ScreenshotClipboard/issues).
 
-The watcher observes pasteboard `changeCount` when a candidate is discovered and before publication. If another app changes the clipboard while that candidate is being prepared, the candidate is skipped to preserve the newer content. It cannot observe a change that occurs before the file's first event. AppKit provides no atomic compare-and-swap transaction across applications, so a tiny final check-to-write race is unavoidable. PNG completeness is established from the format and stable snapshot, not an unreliable assumption that a create event means the writer has closed.
+## Installed files
 
-The screenshot preference plist directory is also monitored for location changes; **SIGHUP** reloads the location explicitly. If a watched folder is removed/renamed, the process exits and launchd retries with a 10-second throttle. Restore a missing folder or choose a valid save location. Only events cause work while idle. Image decoding and TIFF generation use transient memory proportional to screenshot dimensions. Very large captures, heavy system load, delayed metadata, or slow/network/cloud-backed save folders can exceed 200 ms; this is a best-effort target, not a real-time scheduling guarantee.
+All installed components belong to your user account:
 
-## Tests and latency measurements
+| Path | Purpose |
+| --- | --- |
+| `~/Library/Application Support/ScreenshotClipboard/ScreenshotClipboard.app` | Background executable and app metadata. |
+| `~/Library/Application Support/ScreenshotClipboard/screenshot-preferences.plist` | Original screenshot preferences for uninstall. |
+| `~/Library/Application Support/ScreenshotClipboard/applied-preferences.plist` | Preferences owned by the installer. |
+| `~/Library/Application Support/ScreenshotClipboard/error.log` | Agent errors. |
+| `~/Library/LaunchAgents/local.screenshot-clipboard.plist` | Per-user login and restart configuration. |
+
+## Development and testing
+
+Build and test without installing or changing screenshot preferences:
 
 ```sh
 zsh scripts/build.sh
 zsh scripts/test.sh
 ```
 
-Tests create their own temporary folder and named pasteboard. They verify PNG integrity, exact image bytes, TIFF availability, AppKit image reading, baseline exclusion, unrelated PNG exclusion, localized filenames, partial writes, delayed metadata, atomic rename, clipboard conflicts, out-of-order completion, rapid captures, symlinks, and duplicate notifications. Generated fixtures are retained in the printed temporary folder for inspection, never mixed with your screenshots. The operating system can eventually clean its temporary folder.
+The suite covers PNG integrity, exact image bytes, TIFF availability, AppKit image readback, real filesystem events, existing-file exclusion, unrelated images, localized filenames, partial writes, delayed metadata, atomic renames, clipboard conflicts, out-of-order completion, rapid captures, symlinks, and duplicate events. Tests create fixtures in a separate temporary folder and print its path. The operating system can eventually clean that folder.
 
-The benchmark writes tagged 1080p and 4K PNGs, including a 4K noisy image, closes the file and finishes screenshot metadata, then measures until image publication. This exercises actual kernel filesystem events and image preparation. With pasteboard access, it uses a real named `NSPasteboard`; otherwise it clearly labels an in-memory substitute and **does not claim real clipboard timing**. Results and all samples are saved to `build/benchmark.json`.
+Benchmarks write 1080p and 4K tagged fixtures and save results to `build/benchmark.json`. When macOS pasteboard services are available, tests use a real isolated named pasteboard. Otherwise they clearly report an in-memory substitute; those timings exclude clipboard transfer. Build outputs, compiler caches, and benchmark results stay under ignored `build/` and are regenerated locally; a clone does not depend on them.
 
-If Screen Recording permission is **already granted** to the test host, five additional `screencapture` samples run without asking for permission. These copy to the isolated test board. Their process-exit-to-publication measurements are lower-bound proxies because the capture subprocess can exit after writing finishes; they are not exact completion latency. The utility itself never captures the screen.
+The optional native capture benchmark, when already authorized, uses the test screen and writes only to the isolated test clipboard. Its process-exit-to-publication timing is a lower-bound proxy, not exact screenshot completion latency. The normal installed app does not capture the screen itself.
 
-To inspect live production timing, first disable the agent, then run one foreground instance:
+See [VALIDATION.md](VALIDATION.md) for the development Mac's measured results and outstanding manual checks. See [Architecture and measurement](docs/ARCHITECTURE.md) for event handling, screenshot recognition, image validation, clipboard race limits, live timing commands, and references.
 
-```sh
-./build/screenshot-clipboard --disable
-./build/screenshot-clipboard --metrics
-```
+## Behavior and limits
 
-Take native screenshots. Each `copied` JSON record reports `processingMs` and `mtimeToClipboardMs`. The latter includes the interval after the last file data modification, filesystem delivery, metadata availability, validation, and pasteboard submission. Modification time is an approximation of write completion, not an exact writer-close timestamp. It is useful as a conservative proxy on local APFS with unchanged timestamps. Stop with **Control+C**, then restore background operation:
-
-```sh
-./build/screenshot-clipboard --enable
-```
-
-Errors appear in `~/Library/Application Support/ScreenshotClipboard/error.log`. Normal background operation records no screenshots, filenames, or image contents and does not accumulate timing logs.
-
-## Research
-
-Apple documents file saving and clipboard capture as alternative native destinations, with the Control modifier selecting the clipboard: [Take a screenshot on Mac](https://support.apple.com/en-ie/102646). Apple's [Dispatch filesystem events](https://developer.apple.com/documentation/dispatch/dispatchsource/filesystemevent) provide write, extend, attribute, and rename notifications. [NSPasteboard](https://developer.apple.com/documentation/appkit/nspasteboard) provides native image transfer; [ImageIO status](https://developer.apple.com/documentation/imageio/cgimagesourcegetstatus(_:)) complements explicit PNG integrity validation.
-
-The [clipboard-screenshot repository](https://github.com/stevederico/clipboard-screenshot) demonstrates the same file-watcher approach using shell/AppleScript. This implementation uses a persistent Swift process to avoid per-capture subprocess startup and sleep delays. [REA](https://github.com/rea-tools/rea) is a reverse-engineering toolkit; no reverse engineering or additional runtime is needed for these public macOS APIs. No code was copied from either project.
+- The latest completed capture replaces the previous clipboard content; there is no screenshot history.
+- Multiple monitors produce individual files. The last capture file copied wins; images are not stitched together.
+- New PNGs must carry macOS screenshot metadata. Ordinary images and files present at startup are ignored. A newly created copy retaining screenshot metadata can still be treated as a screenshot.
+- The app tries to preserve clipboard content changed by another app while a capture is being prepared. macOS provides no atomic clipboard compare-and-swap, so a small final race remains.
+- The measured sub-200 ms results apply after fixture saving completes, on the tested Mac. Large images, heavy load, or network/cloud-backed folders can take longer. Native thumbnail delay happens before that interval.

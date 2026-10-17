@@ -37,3 +37,11 @@ The test suite regenerates `build/benchmark.json` with full timings and all samp
 The optional native capture benchmark was skipped because `CGPreflightScreenCaptureAccess()` returned false. No Screen Recording permission was requested; the background utility itself does not require it.
 
 Verify the actual full-screen, region, and window shortcuts, pasting into a third-party app, two rapid captures, multiple monitors if available, unrelated PNG exclusion, any Desktop permission prompts, and startup after logout/login. See [README.md](README.md) for the steps. The native floating thumbnail may delay file creation before this utility sees the screenshot.
+
+## Repository portability check
+
+The installer and documentation update was verified using a local Git clone with the updated files copied into it, in a temporary folder whose name contains spaces. The copy started without a `build/` directory or compiler cache. Build and test scripts were invoked from outside the checkout; compilation, executable help, code-signature verification, and all **449 assertions** passed.
+
+This portability run took place in a restricted session and used the suite's explicitly labeled in-memory clipboard substitute. It does not add a new real-pasteboard or installed-agent verification to the unrestricted results above. Installation was not repeated during this check.
+
+All shell scripts passed syntax checks. The top-level installer's help and unknown-option handling ran without building or installing. Environment checks passed on this Mac, and simulated unsupported-OS, pre-macOS-13, and missing-compiler cases returned actionable errors. Relative documentation links were checked locally.
