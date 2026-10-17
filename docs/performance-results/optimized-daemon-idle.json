@@ -1,0 +1,28 @@
+{
+  "after": {
+    "interruptWakeups": 1,
+    "packageIdleWakeups": 0,
+    "physicalFootprintBytes": 2638256,
+    "residentBytes": 9240576,
+    "systemTicks": 107215,
+    "userTicks": 153322
+  },
+  "before": {
+    "interruptWakeups": 0,
+    "packageIdleWakeups": 0,
+    "physicalFootprintBytes": 2654640,
+    "residentBytes": 11370496,
+    "systemTicks": 106135,
+    "userTicks": 152977
+  },
+  "counterConversion": "Raw CPU counters retained; converted from Mach ticks with measured host timebase 125/3 (initial harness incorrectly labelled counters nanoseconds).",
+  "cpuPercent": 0.0001979094734819284,
+  "interruptWakeupsDelta": 1,
+  "machTimebase": {
+    "denom": 3,
+    "numer": 125
+  },
+  "method": "30 seconds of full daemon after 2-second warmup; normal screenshot directories and preference monitoring; unique named pasteboard; proc_pid_rusage",
+  "packageIdleWakeupsDelta": 0,
+  "seconds": 30.001090375
+}

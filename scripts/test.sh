@@ -4,5 +4,5 @@ cd "${0:A:h:h}"
 zsh scripts/check-environment.sh
 mkdir -p build
 xcrun swiftc -O -whole-module-optimization -target "$(uname -m)-apple-macosx13.0" -module-cache-path build/ModuleCache \
-  Sources/Core.swift Tests/main.swift -o build/tests
+  Sources/Core.swift Sources/Management.swift Tests/main.swift -o build/tests
 ./build/tests

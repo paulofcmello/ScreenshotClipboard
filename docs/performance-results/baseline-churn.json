@@ -1,0 +1,6 @@
+{
+  "elapsedMs": 3668.062959,
+  "method": "1000 explicit directory scans with an unchanged corrupt tagged PNG; no event loop during measurement",
+  "readAttempts": 1000,
+  "scans": 1000
+}

@@ -3,13 +3,14 @@ set -eu
 cd "${0:A:h:h}"
 for argument in "$@"; do
   case "$argument" in
-    --keep-location) ;;
+    --keep-location|--desktop) ;;
     -h|--help)
-      print -r -- "Usage: ./install.sh [--keep-location]
+      print -r -- "Usage: ./install.sh [--desktop]
 
 Build, test, and install ScreenshotClipboard for your macOS login.
-By default, screenshots will be saved as PNG files on Desktop.
---keep-location preserves your current screenshot save folder.
+Your current screenshot save folder is preserved by default.
+--desktop explicitly changes the save folder to Desktop.
+--keep-location is accepted for compatibility (now the default).
 
 Run in Terminal as your usual user, without sudo.
 The app starts immediately and after login. See README.md for controls."
@@ -17,7 +18,7 @@ The app starts immediately and after login. See README.md for controls."
       ;;
     *)
       print -u2 -- "Unknown option: $argument"
-      print -u2 -- "Usage: ./install.sh [--keep-location]"
+      print -u2 -- "Usage: ./install.sh [--desktop]"
       exit 64
       ;;
   esac

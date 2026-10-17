@@ -79,14 +79,55 @@ func append(_ url: URL, _ data: Data) throws {
     try file.seekToEnd(); try file.write(contentsOf: data); try file.close()
 }
 
+check(screenshotPreferenceChanges([:], desktop: false, desktopPath: "/Desktop").isEmpty,
+      "Native default preferences need no writes")
+check(screenshotPreferenceChanges(["location": "/Custom", "type": "png", "target": "file"],
+    desktop: false, desktopPath: "/Desktop").isEmpty, "Preserve compatible screenshot settings")
+check(screenshotPreferenceChanges(["location": "/Custom", "type": "jpg", "target": "clipboard"],
+    desktop: false, desktopPath: "/Desktop") == ["type": "png", "target": "file"],
+    "Change only settings required for saved PNGs")
+check(screenshotPreferenceChanges(["location": "/Custom"], desktop: true,
+    desktopPath: "/Desktop") == ["location": "/Desktop"], "Desktop change requires explicit option")
+
+func pixels(_ data: Data) -> Data {
+    let source = CGImageSourceCreateWithData(data as CFData, nil)!
+    let image = CGImageSourceCreateImageAtIndex(source, 0, nil)!
+    var bytes = Data(count: image.width * image.height * 4)
+    bytes.withUnsafeMutableBytes { raw in
+        let context = CGContext(data: raw.baseAddress, width: image.width, height: image.height,
+            bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    }
+    return bytes
+}
 let small = png(320, 240)
 check(completePNG(small), "Valid PNG accepted")
 check(!completePNG(small.dropLast()), "Truncated IEND rejected")
 var corrupt = small; corrupt[40] ^= 1
 check(!completePNG(corrupt), "Bad CRC rejected")
+let fidelity = try write("fidelity.png", small)
+var fidelityStat = stat(); check(lstat(fidelity.path, &fidelityStat) == 0, "Fidelity fixture exists")
+let prepared = readReadyImage(fidelity, identity: Identity(fidelityStat))!
+check(pixels(prepared.png) == pixels(prepared.tiff), "TIFF preserves decoded pixels and color")
+let tiffSource = CGImageSourceCreateWithData(prepared.tiff as CFData, nil)!
+let tiffProps = CGImageSourceCopyPropertiesAtIndex(tiffSource, 0, nil)! as NSDictionary
+check(abs((tiffProps[kCGImagePropertyDPIWidth] as! Double) - 144) < 0.1, "TIFF preserves Retina DPI")
+check((tiffProps[kCGImagePropertyPixelWidth] as! Int) == 320 &&
+      (tiffProps[kCGImagePropertyPixelHeight] as! Int) == 240, "TIFF preserves dimensions")
+var trailing = small; trailing.append(0)
+check(!completePNG(trailing), "Trailing bytes after IEND rejected")
 try write("preexisting.png", small)
 setText("untouched")
-let watcher = ScreenshotWatcher(clipboard: sink)
+var reads = 0
+var changeClipboardDuringRead = false
+let watcher = ScreenshotWatcher(clipboard: sink, readImage: { url, identity in
+    reads += 1
+    let image = readReadyImage(url, identity: identity)
+    if changeClipboardDuringRead { setText("copy during decoding") }
+    return image
+})
 var copies = 0
 var lastURL: URL?
 var latencies: [String: [Double]] = [:]
@@ -159,6 +200,35 @@ let symlink = root.appendingPathComponent("symlink.png")
 try fm.createSymbolicLink(at: symlink, withDestinationURL: newer); spin(0.02)
 check(copies == burstCopies, "Symlinks ignored")
 
+// Directory churn must not repeatedly decode an unchanged corrupt candidate.
+let readsBeforeScan = reads
+watcher.scan(root.path); watcher.scan(root.path)
+check(reads == readsBeforeScan, "Unrelated directory scans do not retry unchanged candidates")
+let beforeRace = copies
+let readsBeforeRace = reads
+changeClipboardDuringRead = true
+try write("decode-conflict.png", small)
+try write("decode-conflict-second.png", small); spin(0.03)
+changeClipboardDuringRead = false
+check(copies == beforeRace && currentText() == "copy during decoding", "Clipboard change during decode preserved")
+check(reads == readsBeforeRace + 1, "All captures discovered before a user copy retain their original generation")
+// More completed captures than the incomplete-candidate descriptor limit,
+// with filenames in reverse birth order.
+let beforeLargeBurst = copies
+for n in 0..<160 { try write("reverse-\(String(format: "%03d", 159-n)).png", small) }
+until { lastURL?.lastPathComponent == "reverse-000.png" }
+check(copies == beforeLargeBurst + 160, "Every completed capture in a large burst is published")
+check(watcher.candidates.count < 128, "Completed burst does not exhaust candidate limit")
+let beforeRestart = copies
+watcher.stop()
+let restarted = ScreenshotWatcher(clipboard: sink)
+var restartCopies = 0
+restarted.onCopy = { _, _, _ in restartCopies += 1 }
+try restarted.watch([root]); spin(0.02)
+check(restartCopies == 0 && copies == beforeRestart, "Restart does not replay screenshots")
+restarted.stop()
+try watcher.watch([root])
+
 func benchmark(_ name: String, _ data: Data, count: Int) throws {
     activeSeries = name
     for i in 0..<count {
@@ -205,7 +275,7 @@ for name in latencies.keys.sorted() {
     let values = latencies[name]!.sorted(), n = values.count
     let mean = values.reduce(0, +) / Double(n), p95 = values[min(n-1, Int(ceil(Double(n) * 0.95)) - 1)]
     series[name] = ["count": n, "meanMs": mean, "medianMs": values[n/2], "p95Ms": p95,
-        "maxMs": values.last!, "under200Ms": values.allSatisfy { $0 < 200 }, "samplesMs": values]
+        "p99Ms": values[min(n-1, Int(ceil(Double(n) * 0.99)) - 1)], "maxMs": values.last!, "under200Ms": values.allSatisfy { $0 < 200 }, "samplesMs": values]
     print(String(format: "%@: n=%d mean=%.2f ms p95=%.2f ms max=%.2f ms", name, n, mean, p95, values.last!))
 }
 report["series"] = series

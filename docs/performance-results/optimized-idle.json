@@ -1,0 +1,28 @@
+{
+  "after": {
+    "interruptWakeups": 3,
+    "packageIdleWakeups": 0,
+    "physicalFootprintBytes": 2294192,
+    "residentBytes": 10043392,
+    "systemTicks": 122303,
+    "userTicks": 147568
+  },
+  "before": {
+    "interruptWakeups": 1,
+    "packageIdleWakeups": 0,
+    "physicalFootprintBytes": 2277808,
+    "residentBytes": 10027008,
+    "systemTicks": 118060,
+    "userTicks": 144780
+  },
+  "counterConversion": "Raw CPU counters retained; converted from Mach ticks with measured host timebase 125/3 (initial harness incorrectly labelled counters nanoseconds).",
+  "cpuPercent": 0.0009763769221406881,
+  "interruptWakeupsDelta": 2,
+  "machTimebase": {
+    "denom": 3,
+    "numer": 125
+  },
+  "method": "30 seconds idle watcher, empty directory and memory clipboard; excludes preferences monitoring and pasteboard service",
+  "packageIdleWakeupsDelta": 0,
+  "seconds": 30.004635166
+}

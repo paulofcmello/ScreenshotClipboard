@@ -37,18 +37,18 @@ The installer:
 1. Builds the executable locally and applies an ad-hoc code signature; no developer account is needed.
 2. Runs the integration tests using a separate test clipboard, preserving your general clipboard.
 3. Backs up the original screenshot destination, image format, and save folder.
-4. Sets screenshot output to **PNG files on Desktop**.
+4. Selects saved PNG output when necessary, preserving your existing save folder.
 5. Installs a background app and per-user LaunchAgent, then starts it immediately and after login.
 
-It briefly restarts SystemUIServer to refresh screenshot settings. It leaves the native floating thumbnail setting as you configured it. `zsh scripts/setup.sh` remains an equivalent installation command; `./install.sh --help` shows the installer options.
+It restarts SystemUIServer only when screenshot preferences actually change. It leaves the native floating thumbnail setting as you configured it. `zsh scripts/setup.sh` remains an equivalent installation command; `./install.sh --help` shows the installer options.
 
-To **keep your existing custom screenshot folder**, use this instead of the default installation command:
+To explicitly change the save folder to **Desktop**, use:
 
 ```sh
-./install.sh --keep-location
+./install.sh --desktop
 ```
 
-This preserves the configured save folder while still selecting file output and PNG format. The app watches Desktop and the configured folder. The folder must exist and be readable. In **⌘⇧5 → Options**, keep a file save destination selected: **Clipboard**, Mail, and other app destinations do not produce the files this utility needs.
+Use this option only to change the save folder to Desktop. Without it, the configured folder is preserved (`--keep-location` remains a compatible no-op). The app watches Desktop and the configured folder. The folder must exist and be readable. In **⌘⇧5 → Options**, keep a file save destination selected: **Clipboard**, Mail, and other app destinations do not produce the files this utility needs.
 
 ## Permissions and first use
 
@@ -96,7 +96,7 @@ git pull --ff-only
 ./install.sh --keep-location
 ```
 
-This rebuilds, tests, replaces the installed app, and restarts the agent. It preserves the existing screenshot save folder and the original preference backup. Use `./install.sh` without the option if you want to reset the save folder to Desktop. Reinstalling enables the agent even if you previously paused it. If you deleted the checkout, clone it again and use the same installation command.
+This rebuilds, tests, replaces the installed app, and restarts the agent. It preserves the existing screenshot save folder and the original preference backup. Use `./install.sh --desktop` if you want to reset the save folder to Desktop. Reinstalling enables the agent even if you previously paused it. If you deleted the checkout, clone it again and use the same installation command.
 
 ## Troubleshooting
 
@@ -148,6 +148,22 @@ The optional native capture benchmark, when already authorized, uses the test sc
 
 See [VALIDATION.md](VALIDATION.md) for the development Mac's measured results and outstanding manual checks. See [Architecture and measurement](docs/ARCHITECTURE.md) for event handling, screenshot recognition, image validation, clipboard race limits, live timing commands, and references.
 
+## Performance and reliability improvements
+
+- Unrelated directory events no longer reread unchanged pending screenshots. In the controlled 1,000-scan workload, read attempts fell from 1,000 to zero and elapsed time fell from 3,668 ms to 42 ms.
+- Completed captures release their candidate slots immediately and are processed in birth order. Regression tests cover 160 consecutive files with reverse-sorted names.
+- Clipboard generation checks protect an entire discovered batch when another app copies during decoding. File descriptor identity is checked after opening, and temporary objects are released within each publication.
+- Installation preserves the screenshot save folder by default; `--desktop` explicitly selects Desktop. Compatible screenshot settings are left alone, and SystemUIServer restarts only when settings change.
+- PNG integrity checks, eager decoding, and eager PNG/TIFF publication remain intact. Direct TIFF encoding and memory mapping were investigated but not adopted because the full-path benefit or correctness tradeoff did not justify them.
+
+Normal capture latency showed mixed before/after results, with no demonstrated general speedup or peak-memory reduction. Idle operation was already efficient: both full-daemon runs recorded one interrupt wakeup and zero package-idle wakeups over 30 seconds. See [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) for measurement boundaries, raw results, rejected experiments and reproduction commands.
+
+The expanded regression suite passed 1,108 assertions with a real isolated pasteboard during reinstallation. Matched baseline and updated performance runs each passed the original 449 assertions with real isolated pasteboards. To build, test, install the latest checkout and restart the login agent while preserving your save folder:
+
+```sh
+./install.sh
+```
+
 ## Behavior and limits
 
 - The latest completed capture replaces the previous clipboard content; there is no screenshot history.
@@ -155,3 +171,5 @@ See [VALIDATION.md](VALIDATION.md) for the development Mac's measured results an
 - New PNGs must carry macOS screenshot metadata. Ordinary images and files present at startup are ignored. A newly created copy retaining screenshot metadata can still be treated as a screenshot.
 - The app tries to preserve clipboard content changed by another app while a capture is being prepared. macOS provides no atomic clipboard compare-and-swap, so a small final race remains.
 - The measured sub-200 ms results apply after fixture saving completes, on the tested Mac. Large images, heavy load, or network/cloud-backed folders can take longer. Native thumbnail delay happens before that interval.
+
+Performance findings, rejected experiments, resource measurements, and reproducible comparisons are documented in [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md).

@@ -164,6 +164,7 @@ final class NativeImageClipboard: ImageClipboard {
 
 final class ScreenshotWatcher {
     let clipboard: ImageClipboard
+    let readImage: (URL, Identity) -> ReadyImage?
     let started = Date().timeIntervalSince1970
     var directories: [String: DispatchSourceFileSystemObject] = [:]
     var seen: Set<Identity> = []
@@ -176,8 +177,9 @@ final class ScreenshotWatcher {
     convenience init(pasteboard: NSPasteboard = .general) {
         self.init(clipboard: NativeImageClipboard(pasteboard))
     }
-    init(clipboard: ImageClipboard) {
-        self.clipboard = clipboard; ownChangeCount = clipboard.changeCount
+    init(clipboard: ImageClipboard, readImage: @escaping (URL, Identity) -> ReadyImage? = readReadyImage) {
+        self.clipboard = clipboard; self.readImage = readImage
+        ownChangeCount = clipboard.changeCount
     }
 
     func observeClipboard() {
@@ -203,7 +205,7 @@ final class ScreenshotWatcher {
                 if !source.data.intersection([.rename, .delete, .revoke]).isEmpty {
                     emit("directory-unavailable", ["path": path]); exit(75)
                 }
-                self.scan(path)
+                autoreleasepool { self.scan(path) }
             }
             source.setCancelHandler { close(fd) }
             directories[path] = source
@@ -220,47 +222,56 @@ final class ScreenshotWatcher {
 
     func scan(_ path: String) {
         observeClipboard()
+        let scanGeneration = generation
         guard let urls = try? FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: nil) else { emit("scan-failed", ["path": path]); return }
         var found: [(URL, stat)] = []
+        var pending: [Candidate] = []
         for url in urls {
             var s = stat()
             guard lstat(url.path, &s) == 0, s.st_mode & S_IFMT == S_IFREG else { continue }
             let id = Identity(s)
-            if let candidate = candidates[id] { candidate.url = url; continue }
+            if let candidate = candidates[id] {
+                if candidate.url != url { candidate.url = url; pending.append(candidate) }
+                continue
+            }
             guard !seen.contains(id) else { continue }
-            seen.insert(id)
             // Old screenshots moved/copied to this directory must not steal the clipboard.
             let birth = Double(s.st_birthtimespec.tv_sec) + Double(s.st_birthtimespec.tv_nsec) / 1e9
-            guard birth >= started else { continue }
+            guard birth >= started else { seen.insert(id); continue }
             found.append((url, s))
         }
         found.sort {
-            let a = $0.1.st_mtimespec, b = $1.1.st_mtimespec
+            let a = $0.1.st_birthtimespec, b = $1.1.st_birthtimespec
             return a.tv_sec == b.tv_sec ? a.tv_nsec < b.tv_nsec : a.tv_sec < b.tv_sec
         }
         for (url, s) in found {
             guard candidates.count < 128 else { emit("candidate-limit"); break }
             let id = Identity(s), fd = open(url.path, O_EVTONLY | O_NOFOLLOW)
             guard fd >= 0 else { continue }
-            let candidate = Candidate(url, id, generation)
+            var opened = stat()
+            guard fstat(fd, &opened) == 0, Identity(opened) == id,
+                  opened.st_mode & S_IFMT == S_IFREG else { close(fd); continue }
+            let candidate = Candidate(url, id, scanGeneration)
             let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd,
                 eventMask: [.write, .extend, .attrib, .rename, .delete, .revoke], queue: .main)
             candidate.source = source
             source.setEventHandler { [weak self, weak candidate] in
                 guard let self, let candidate else { return }
                 if !source.data.intersection([.delete, .revoke]).isEmpty { self.remove(id); return }
-                if source.data.contains(.rename) { self.scan(path) }
-                self.attempt(candidate)
+                if source.data.contains(.rename) { autoreleasepool { self.scan(path) } }
+                autoreleasepool { self.attempt(candidate) }
             }
             source.setCancelHandler { close(fd) }
-            candidates[id] = candidate; source.resume()
+            candidates[id] = candidate; seen.insert(id); source.resume()
+            // Completed captures immediately release their candidate slot; a burst
+            // of ready files must not exhaust the incomplete-file descriptor cap.
+            autoreleasepool { attempt(candidate) }
         }
-        let pending = candidates.values.filter {
-            $0.url.deletingLastPathComponent().resolvingSymlinksInPath().path == path
-        }
-            .sorted { $0.url.lastPathComponent < $1.url.lastPathComponent }
-        for candidate in pending { attempt(candidate) }
+        for candidate in pending.sorted(by: {
+            ($0.identity.birthSeconds, $0.identity.birthNanos) <
+            ($1.identity.birthSeconds, $1.identity.birthNanos)
+        }) { autoreleasepool { attempt(candidate) } }
         scheduleCleanup()
     }
 
@@ -274,7 +285,7 @@ final class ScreenshotWatcher {
             emit("skipped-newer-clipboard"); remove(candidate.identity); return
         }
         let eventTime = Date().timeIntervalSince1970
-        guard let image = autoreleasepool(invoking: { readReadyImage(candidate.url, identity: candidate.identity) })
+        guard let image = autoreleasepool(invoking: { readImage(candidate.url, candidate.identity) })
         else { return }
         observeClipboard()
         guard candidate.clipboardGeneration == generation else {
@@ -306,7 +317,7 @@ final class ScreenshotWatcher {
         }
     }
     func scheduleCleanup() {
-        guard !cleanupScheduled, !candidates.isEmpty else { return }
+        guard !cleanupScheduled, !candidates.isEmpty || seen.count > 8192 else { return }
         cleanupScheduled = true
         // One-shot resource cleanup, never a readiness delay or polling loop.
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
@@ -325,7 +336,7 @@ final class ScreenshotWatcher {
                 }
                 self.seen = present
             }
-            self.scheduleCleanup()
+            if !self.candidates.isEmpty { self.scheduleCleanup() }
         }
     }
     func stop() {

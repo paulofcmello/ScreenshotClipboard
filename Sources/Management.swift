@@ -37,7 +37,17 @@ func writePlist(_ value: Any, _ url: URL) throws {
     try data.write(to: url, options: .atomic)
 }
 
-func manage(_ command: String, keepLocation: Bool) throws {
+// Missing keys already mean file/PNG/Desktop in the native screenshot service.
+func screenshotPreferenceChanges(_ current: [String: String], desktop: Bool,
+                                 desktopPath: String) -> [String: String] {
+    var changes: [String: String] = [:]
+    if let target = current["target"], target != "file" { changes["target"] = "file" }
+    if let type = current["type"], type.lowercased() != "png" { changes["type"] = "png" }
+    if desktop, current["location"] != desktopPath { changes["location"] = desktopPath }
+    return changes
+}
+
+func manage(_ command: String, desktop: Bool) throws {
     let fm = FileManager.default, uid = getuid(), domain = "gui/\(uid)"
     switch command {
     case "--install":
@@ -66,10 +76,11 @@ func manage(_ command: String, keepLocation: Bool) throws {
         ], installedApp.appendingPathComponent("Contents/Info.plist"))
         try run("/usr/bin/codesign", ["--force", "--sign", "-", installedApp.path])
         // Save exactly which values we own, so uninstall preserves subsequent edits.
-        var applied: [String: String] = ["target": "file", "type": "png"]
-        if !keepLocation {
-            applied["location"] = fm.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path
-        }
+        CFPreferencesAppSynchronize(preferenceDomain as CFString)
+        var current: [String: String] = [:]
+        for key in ["target", "type", "location"] { current[key] = preference(key) as? String }
+        let applied = screenshotPreferenceChanges(current, desktop: desktop,
+            desktopPath: fm.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path)
         let appliedURL = supportDirectory.appendingPathComponent("applied-preferences.plist")
         var owned = applied
         if let previousData = try? Data(contentsOf: appliedURL),
@@ -94,8 +105,8 @@ func manage(_ command: String, keepLocation: Bool) throws {
         try run("/bin/launchctl", ["bootout", "\(domain)/\(serviceLabel)"], allowFailure: true)
         try run("/bin/launchctl", ["enable", "\(domain)/\(serviceLabel)"])
         try run("/bin/launchctl", ["bootstrap", domain, launchAgent.path])
-        // Restart the menu-extra host to refresh cached native screenshot settings.
-        try run("/usr/bin/killall", ["SystemUIServer"], allowFailure: true)
+        // Refresh cached native settings only when preferences actually changed.
+        if !applied.isEmpty { try run("/usr/bin/killall", ["SystemUIServer"], allowFailure: true) }
         print("Installed and started. Screenshots save as PNG and copy automatically.")
         print("If Desktop access is requested, allow it. No Accessibility or Screen Recording access is needed.")
     case "--disable":

@@ -45,3 +45,7 @@ The installer and documentation update was verified using a local Git clone with
 This portability run took place in a restricted session and used the suite's explicitly labeled in-memory clipboard substitute. It does not add a new real-pasteboard or installed-agent verification to the unrestricted results above. Installation was not repeated during this check.
 
 All shell scripts passed syntax checks. The top-level installer's help and unknown-option handling ran without building or installing. Environment checks passed on this Mac, and simulated unsupported-OS, pre-macOS-13, and missing-compiler cases returned actionable errors. Relative documentation links were checked locally.
+
+## Performance-audit update installation
+
+The performance and reliability update was rebuilt, reinstalled and restarted at the user’s request. All **1,108 assertions** passed with a real isolated named NSPasteboard; native screen capture was skipped because permission was not already granted. Launchd reported the updated service running and the custom screenshot save folder was retained. See [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) for the matched before/after measurements and [installation test results](docs/performance-results/installed-regressions.json) for this later validation run.
