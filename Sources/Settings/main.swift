@@ -85,7 +85,7 @@ func setAppleStyle(_ on: Bool) {
 
 final class Settings: NSObject, NSApplicationDelegate {
     var window: NSWindow!
-    let enabled = NSButton(checkboxWithTitle: "Copy screenshots to clipboard", target: nil, action: nil)
+    let enabled = NSButton(checkboxWithTitle: "Enable Screenshot Clipboard", target: nil, action: nil)
     let apple = NSButton(radioButtonWithTitle: "Apple", target: nil, action: nil)
     let classic = NSButton(radioButtonWithTitle: "Classic", target: nil, action: nil)
 
@@ -115,8 +115,8 @@ final class Settings: NSObject, NSApplicationDelegate {
 
         let separator = NSBox(); separator.boxType = .separator
         let grid = NSGridView(views: [
-            [title("Screenshots:"), enabled],
-            [NSGridCell.emptyContentView, note("Takes over ⌘⇧3 and ⌘⇧4. Turn off to use Apple's screenshots instead.")],
+            [title("Status:"), enabled],
+            [NSGridCell.emptyContentView, note("On: ⌘⇧3 and ⌘⇧4 copy each screenshot to your clipboard.\nOff: your Mac's own screenshots are back, exactly as before. Nothing from this app runs.")],
             [separator],
             [title("Preview:"), apple],
             [NSGridCell.emptyContentView, note("Black frame that slides in from the edge, like macOS.")],
@@ -174,6 +174,8 @@ final class Settings: NSObject, NSApplicationDelegate {
         let isApple = appleStyle()
         apple.state = isApple ? .on : .off
         classic.state = isApple ? .off : .on
+        // The preview only exists while enabled.
+        apple.isEnabled = enabled.state == .on; classic.isEnabled = apple.isEnabled
     }
     @objc func toggleEnabled() { setEnabled(enabled.state == .on); refresh() }
     @objc func chooseStyle(_ sender: NSButton) { setAppleStyle(sender === apple); refresh() }
