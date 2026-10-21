@@ -116,7 +116,7 @@ final class Settings: NSObject, NSApplicationDelegate {
         let separator = NSBox(); separator.boxType = .separator
         let grid = NSGridView(views: [
             [title("Status:"), enabled],
-            [NSGridCell.emptyContentView, note("On: ⌘⇧3 and ⌘⇧4 copy each screenshot to your clipboard.\nOff: your Mac's own screenshots are back, exactly as before. Nothing from this app runs.")],
+            [NSGridCell.emptyContentView, note("On: ⌘⇧3 and ⌘⇧4 copy each screenshot to your clipboard.\nOff: your Mac's normal screenshots come back and this app does nothing.")],
             [separator],
             [title("Preview:"), apple],
             [NSGridCell.emptyContentView, note("Black frame that slides in from the edge, like macOS.")],
@@ -124,6 +124,9 @@ final class Settings: NSObject, NSApplicationDelegate {
             [NSGridCell.emptyContentView, note("Rounded frame in your window color.")],
         ])
         grid.column(at: 0).xPlacement = .trailing
+        // Wrapped notes measure their height at this width; a matching column keeps
+        // every line visible.
+        grid.column(at: 1).width = 260
         grid.rowAlignment = .firstBaseline
         grid.rowSpacing = 8
         grid.columnSpacing = 8
