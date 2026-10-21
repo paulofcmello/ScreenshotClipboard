@@ -48,20 +48,49 @@ if args.contains("--help") {
     exit(0)
 }
 
-final class PreviewView: NSView, NSDraggingSource {
+final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
     var thumbnail: NSImage?
     var file: URL?
     var onOpen: (() -> Void)?
     var onDragEnd: (() -> Void)?
+    var onHold: (() -> Void)?
+    var onRelease: (() -> Void)?
+    var onDismiss: (() -> Void)?
     var dragging = false
+    var swipe: CGFloat = 0
+    var restingX: CGFloat = 0
+    var pressed: NSPoint?
+    var sliding = false
+    var scrolling = false
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
         thumbnail?.draw(in: bounds.insetBy(dx: 5, dy: 5))
     }
-    override func mouseDown(with event: NSEvent) { if event.clickCount == 2 { onOpen?() } }
+    override func mouseDown(with event: NSEvent) {
+        pressed = NSEvent.mouseLocation; sliding = false
+        if event.clickCount == 2 { onOpen?() }
+    }
+    // A mostly rightward drag slides the preview away like the native one;
+    // any other direction drags the file out.
     override func mouseDragged(with event: NSEvent) {
-        guard !dragging, let file, let thumbnail else { return }
+        guard !dragging, let window, let start = pressed else { return }
+        let now = NSEvent.mouseLocation, dx = now.x - start.x, dy = now.y - start.y
+        if !sliding {
+            guard hypot(dx, dy) > 4 else { return }
+            if dx > abs(dy) {
+                sliding = true; restingX = window.frame.minX; onHold?()
+            } else { beginFileDrag(event); return }
+        }
+        swipe = max(0, dx)
+        window.setFrameOrigin(NSPoint(x: restingX + swipe, y: window.frame.minY))
+    }
+    override func mouseUp(with event: NSEvent) {
+        pressed = nil
+        if sliding { sliding = false; settle() }
+    }
+    func beginFileDrag(_ event: NSEvent) {
+        guard let file, let thumbnail else { return }
         dragging = true
         let item = NSDraggingItem(pasteboardWriter: file as NSURL)
         item.setDraggingFrame(bounds.insetBy(dx: 5, dy: 5), contents: thumbnail)
@@ -71,6 +100,56 @@ final class PreviewView: NSView, NSDraggingSource {
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         dragging = false
         onDragEnd?()
+    }
+
+    // Built only when requested, so an unused preview pays nothing for it.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard file != nil else { return nil }
+        let menu = NSMenu()
+        menu.delegate = self
+        for (title, action) in [("Open", #selector(openFile)), ("Show in Finder", #selector(reveal)),
+                                ("Move to Trash", #selector(trash))] {
+            menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Close", action: #selector(close), keyEquivalent: "").target = self
+        return menu
+    }
+    func menuWillOpen(_ menu: NSMenu) { onHold?() }
+    func menuDidClose(_ menu: NSMenu) {
+        // Item actions run after menuDidClose; let them dismiss first.
+        DispatchQueue.main.async { [weak self] in self?.onRelease?() }
+    }
+    @objc func openFile() { onOpen?() }
+    @objc func reveal() {
+        if let file { NSWorkspace.shared.activateFileViewerSelecting([file]) }
+        onDismiss?()
+    }
+    @objc func trash() {
+        if let file { NSWorkspace.shared.recycle([file]) }
+        onDismiss?()
+    }
+    @objc func close() { onDismiss?() }
+
+    // Two-finger swipe right slides the preview off screen, like the native one.
+    override func scrollWheel(with event: NSEvent) {
+        guard let window, event.hasPreciseScrollingDeltas, event.momentumPhase.isEmpty else { return }
+        if event.phase.contains(.began) { swipe = 0; restingX = window.frame.minX; scrolling = true; onHold?() }
+        guard scrolling else { return }
+        let dx = event.isDirectionInvertedFromDevice ? event.scrollingDeltaX : -event.scrollingDeltaX
+        swipe = max(0, swipe + dx)
+        window.setFrameOrigin(NSPoint(x: restingX + swipe, y: window.frame.minY))
+        guard event.phase.contains(.ended) || event.phase.contains(.cancelled) else { return }
+        scrolling = false; settle()
+    }
+    func settle() {
+        guard let window else { return }
+        let away = swipe > 40
+        var target = window.frame
+        target.origin.x = away ? (window.screen?.frame.maxX ?? target.maxX) + 10 : restingX
+        NSAnimationContext.runAnimationGroup({ $0.duration = 0.15
+            window.animator().setFrame(target, display: true)
+        }, completionHandler: { [weak self] in away ? self?.onDismiss?() : self?.onRelease?() })
     }
 }
 
@@ -118,9 +197,12 @@ final class Prototype: NSObject, NSApplicationDelegate {
             let view = PreviewView(frame: NSRect(origin: .zero, size: rect.size))
             view.thumbnail = NSImage(cgImage: cg, size: NSSize(width: width - 10, height: height - 10))
             view.file = file
-            view.toolTip = "Drag to copy the file. Double-click to open."
+            view.toolTip = "Drag to copy the file. Double-click to open. Swipe right to dismiss."
             view.onOpen = { [weak self] in NSWorkspace.shared.open(file); self?.dismiss() }
             view.onDragEnd = { [weak self] in self?.dismiss() }
+            view.onDismiss = { [weak self] in self?.dismiss() }
+            view.onHold = { [weak self] in self?.dismissal?.cancel() }
+            view.onRelease = { [weak self] in self?.scheduleDismissal() }
             window.contentView = view
             panel = window
             window.orderFrontRegardless()
@@ -134,6 +216,11 @@ final class Prototype: NSObject, NSApplicationDelegate {
 #if MEASURE
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { metrics("settled") }
 #endif
+        scheduleDismissal()
+    }
+    func scheduleDismissal() {
+        guard panel != nil else { return }
+        dismissal?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.dismiss() }
         dismissal = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
