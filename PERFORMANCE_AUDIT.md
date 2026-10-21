@@ -1,20 +1,20 @@
 # Performance
 
-Measured on Apple Silicon, macOS 26.5. Memory is the process's physical footprint, which is what Activity Monitor shows as "Memory".
+Measured on Apple Silicon, macOS 26.5. "Footprint" is what Activity Monitor shows as "Memory". "Resident" also counts memory shared with the system, so it reads higher.
 
 ## vs Apple's screenshot thumbnail
 
-Both sides used the same 1920×1080 test image. "Apple" is `screencaptureui`, the process behind the native floating thumbnail.
+Same test for both: ⌘⇧3 pressed three times (full screen, 2940×1912), from keypress until the preview closes. Every process involved was counted: `screencapture` plus `screencaptureui` for Apple; `screencapture`, the preview process and the shortcut listener for ours. Both sides were measured the same way, by sampling `ps` every 20 ms.
 
 | | Apple | ScreenshotClipboard | Change |
 |---|---:|---:|---:|
-| Memory while preview is shown | 20.5 MiB | 13.0 MiB | **−37%** |
-| Peak memory | 20.9 MiB | 13.0 MiB | **−38%** |
-| CPU time | 0.17 s | 0.14 s | −19%* |
-| Process alive after capture | ~12 s | ~5 s | −58% |
-| Copies the image to the clipboard | no | yes, ~58 ms after the file is saved (4K) | — |
+| CPU time per screenshot | 0.22 s | 0.29 s | **+34%** |
+| Peak memory (resident) | 53.2 MB | 41.9 MB | **−21%** |
+| Peak memory (footprint, 1080p test) | 20.9 MiB | 13.0 MiB | **−38%** |
+| Time processes stay alive, 3 screenshots | 24.5 s | 18.6 s | −24% |
+| Copies the image to the clipboard | no | yes | — |
 
-\*Not an exact comparison: Apple's number includes taking the capture, ours starts from the saved file.
+Ours uses more CPU because it starts a fresh preview process for every screenshot and also writes the image to the clipboard. Apple keeps one `screencaptureui` process running across captures. In exchange, ours uses less memory and quits as soon as each preview closes.
 
 ## What it costs that Apple doesn't
 
@@ -39,7 +39,7 @@ The Apple-like style is slightly lighter because its thumbnail is smaller. The C
 
 ## Limits
 
-- Small samples (2–3 runs per number) on one machine. Treat differences under ~10% as noise.
+- Small samples (2–3 runs or 3 screenshots per number) on one machine. Treat differences under ~10% as noise.
 - WindowServer and clipboard-service memory aren't included, since macOS doesn't expose them without root.
 - No battery measurement.
 
