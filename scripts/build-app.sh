@@ -23,7 +23,10 @@ compile Sources/Settings/main.swift "$app/Contents/MacOS/settings"
 compile Sources/Hotkeys/main.swift "$helper/Contents/MacOS/screenshot-clipboard"
 compile Sources/Capture/main.swift "$helper/Contents/MacOS/capture"
 
-version=${VERSION:-2.0}
+# Releases pass VERSION from the tag; local builds use the latest tag so the
+# in-app updater compares like with like.
+version=${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed "s/^v//")}
+version=${version:-2.0}
 info() {
   cat > "$1/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

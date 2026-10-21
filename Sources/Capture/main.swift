@@ -52,6 +52,12 @@ if args.contains("--help") {
 // floating thumbnail; `defaults delete local.screenshot-clipboard PreviewStyle` restores the default.
 let nativeStyle = UserDefaults.standard.string(forKey: "PreviewStyle") == "native"
 let padding: CGFloat = nativeStyle ? 4 : 5
+// Set in the settings window. Only the off state is stored, so a missing key means on.
+let copyImage = UserDefaults.standard.object(forKey: "CopyToClipboard") as? Bool ?? true
+// When saving is off, the capture lives in a temporary folder just long enough for the
+// preview; the next capture clears it. Passed on to the preview so both phases agree.
+let unsaved = args.contains("--unsaved") || UserDefaults.standard.object(forKey: "SaveFile") as? Bool == false
+let unsavedFolder = FileManager.default.temporaryDirectory.appendingPathComponent("ScreenshotClipboard", isDirectory: true)
 
 final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
     var thumbnail: NSImage?
@@ -123,8 +129,9 @@ final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
         guard file != nil else { return nil }
         let menu = NSMenu()
         menu.delegate = self
-        for (title, action) in [("Open", #selector(openFile)), ("Show in Finder", #selector(reveal)),
-                                ("Move to Trash", #selector(trash))] {
+        let items = [("Open", #selector(openFile)), ("Show in Finder", #selector(reveal)), ("Move to Trash", #selector(trash))]
+        // An unsaved capture has no file worth finding or trashing.
+        for (title, action) in unsaved ? Array(items.prefix(1)) : items {
             menu.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
         }
         menu.addItem(.separator())
@@ -288,8 +295,13 @@ if option("--preview-file") == nil {
     if let path = option("--fixture") {
         file = URL(fileURLWithPath: path).standardizedFileURL
     } else {
-        let folder = option("--output-directory").map { URL(fileURLWithPath: $0) }
+        var folder = option("--output-directory").map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+        if unsaved {
+            try? FileManager.default.removeItem(at: unsavedFolder)
+            try? FileManager.default.createDirectory(at: unsavedFolder, withIntermediateDirectories: true)
+            folder = unsavedFolder
+        }
         file = folder.appendingPathComponent("Screenshot-\(UUID().uuidString).png")
         let capture = Process()
         capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -302,13 +314,15 @@ if option("--preview-file") == nil {
         guard capture.terminationStatus == 0, FileManager.default.fileExists(atPath: file.path) else { exit(1) }
     }
     let start = DispatchTime.now().uptimeNanoseconds
-    let copied = autoreleasepool { () -> Bool in
+    let copied = !copyImage || autoreleasepool { () -> Bool in
         guard let data = try? Data(contentsOf: file, options: .alwaysMapped) else { return false }
         let board = option("--pasteboard").map { NSPasteboard(name: .init($0)) } ?? .general
         board.clearContents()
-        guard board.setData(data, forType: .png), board.setString(file.absoluteString, forType: .fileURL) else { return false }
+        // A temporary file goes away, so an unsaved capture is copied as an image only.
+        let url = unsaved ? nil : file.absoluteString
+        guard board.setData(data, forType: .png), url.map({ board.setString($0, forType: .fileURL) }) ?? true else { return false }
         let verify = args.contains("--verify-clipboard")
-        if verify && (board.data(forType: .png) != data || board.string(forType: .fileURL) != file.absoluteString) { return false }
+        if verify && (board.data(forType: .png) != data || board.string(forType: .fileURL) != url) { return false }
         metrics("copied", ["elapsedMs": Double(DispatchTime.now().uptimeNanoseconds - start)/1e6,
             "pngBytes": data.count, "clipboardVerified": verify ? true as Any : NSNull()])
         return true
@@ -317,6 +331,7 @@ if option("--preview-file") == nil {
     if let ready = option("--ready-file") { FileManager.default.createFile(atPath: ready, contents: Data()) }
     let executable = URL(fileURLWithPath: args[0]).standardizedFileURL.path
     let arguments = [executable] + Array(args.dropFirst()) + ["--preview-file", file.path, "--publication-start", String(start)]
+        + (unsaved && !args.contains("--unsaved") ? ["--unsaved"] : [])
     let pointers = arguments.map { strdup($0) } + [nil]
     pointers.withUnsafeBufferPointer { _ = execv(executable, $0.baseAddress!) }
     fputs("Could not start preview: \(String(cString: strerror(errno)))\n", stderr)

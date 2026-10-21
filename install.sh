@@ -10,9 +10,9 @@ installed="$target/$name"
 cli="$installed/Contents/MacOS/settings"
 
 case "${1:-}" in
-  --on|--off|--style|--status) exec "$cli" "$@" ;;
+  --on|--off|--style|--save|--copy|--status) exec "$cli" "$@" ;;
   --restore) exec python3 scripts/activate-thumbnail.py --restore ;;
-  --help) print 'Usage: ./install.sh [--on | --off | --style [apple | classic] | --status | --restore]'; exit 0 ;;
+  --help) print 'Usage: ./install.sh [--on | --off | --style [apple | classic] | --save [on | off] | --copy [on | off] | --status | --restore]'; exit 0 ;;
   '') ;;
   *) print -u2 'Unknown option. Use --help.'; exit 1 ;;
 esac

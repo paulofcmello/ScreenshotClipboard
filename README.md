@@ -53,7 +53,9 @@ It also closes by itself after 5 seconds. ⌘⇧5 still opens Apple's own screen
 
 ## Settings
 
-Open **Screenshot Clipboard** to turn it on or off and pick the preview look (Apple or Classic). The window only runs while it's open; screenshots keep working after you close it.
+Open **Screenshot Clipboard** to turn it on or off, choose whether each screenshot is **saved as a file**, **copied to the clipboard**, or both, and pick the preview look (Apple or Classic). At least one of saving or copying stays on.
+
+The window also checks GitHub for a newer version each time you open it. Click **Update Now** to install it in place, with no download or Open Anyway step. macOS may ask for Screen Recording permission again after an update. The window only runs while it's open; screenshots keep working after you close it.
 
 Turning it off gives ⌘⇧3 and ⌘⇧4 back to macOS.
 
