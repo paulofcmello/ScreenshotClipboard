@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: VERSION="${GITHUB_REF_NAME#v}" zsh scripts/build-app.sh
+        run: VERSION="${GITHUB_REF_NAME#v}" DMG=1 zsh scripts/build-app.sh
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

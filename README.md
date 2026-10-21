@@ -10,11 +10,23 @@ It saves the file like normal and shows a small preview in the corner.
 2. Open it and drag **Screenshot Clipboard** into **Applications**.
 3. Open **Screenshot Clipboard** from Applications.
 
-The first time, macOS says it can't verify the app, because it isn't from a paid Apple developer account. To allow it once:
+The first time, macOS says it can't verify the app, because it isn't from a paid Apple developer account. Allow it once, either way:
 
-- Click **Done**.
-- Go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
-- Open the app again and confirm.
+**Option 1: System Settings**
+
+- Click **Done**, not Move to Trash.
+- Right away, go to **System Settings → Privacy & Security** and scroll to the bottom.
+- Click **Open Anyway** next to "Screenshot Clipboard", enter your password, then click **Open Anyway** again.
+
+The button only appears for about an hour after you try to open the app.
+
+**Option 2: Terminal**
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Screenshot Clipboard.app"
+```
+
+This removes the "downloaded from the internet" mark from this app only. Then open it normally.
 
 The app turns itself on. Take a screenshot, and when macOS asks, allow **ScreenshotClipboard** in **Screen & System Audio Recording**.
 

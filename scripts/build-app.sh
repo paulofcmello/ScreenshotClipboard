@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Builds "Screenshot Clipboard.app" (settings app with the background app inside)
-# as a universal binary, plus dist/ScreenshotClipboard.dmg for downloads.
+# as a universal binary; with DMG=1 also dist/ScreenshotClipboard.dmg for downloads.
 set -eu
 cd "${0:A:h:h}"
 zsh scripts/check-environment.sh
@@ -58,10 +58,13 @@ codesign --force --sign - "$helper/Contents/MacOS/capture"
 codesign --force --sign - "$helper"
 codesign --force --sign - "$app"
 
+# The DMG is only for releases (DMG=1); installing from source doesn't need it.
+[[ ${DMG:-0} == 1 ]] || { print "Built $app"; exit 0; }
+python3 -m venv build/venv
+build/venv/bin/pip install --quiet dmgbuild==1.6.7
+tiffutil -cathidpicheck Resources/dmg-background.png Resources/dmg-background@2x.png -out build/dmg-background.tiff
 mkdir -p dist
-rm -rf build/dmg dist/ScreenshotClipboard.dmg
-mkdir -p build/dmg
-cp -R "$app" build/dmg/
-ln -s /Applications build/dmg/Applications
-hdiutil create -volname "Screenshot Clipboard" -srcfolder build/dmg -format UDZO -quiet dist/ScreenshotClipboard.dmg
+rm -f dist/ScreenshotClipboard.dmg
+build/venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$app" -D background=build/dmg-background.tiff \
+  "Screenshot Clipboard" dist/ScreenshotClipboard.dmg
 print "Built $app and dist/ScreenshotClipboard.dmg"
