@@ -4,7 +4,7 @@ Take a screenshot on your Mac and it's already on your clipboard. Just paste.
 
 It saves the file like normal and shows a small preview in the corner.
 
-**[Download](#download)** · **[Performance vs Apple's screenshots](PERFORMANCE_AUDIT.md)**
+**[Download](#download)** · **[Performance](#performance)**
 
 ## Download
 
@@ -56,6 +56,18 @@ It also closes by itself after 5 seconds. ⌘⇧5 still opens Apple's own screen
 Open **Screenshot Clipboard** to turn it on or off and pick the preview look (Apple or Classic). The window only runs while it's open; screenshots keep working after you close it.
 
 Turning it off gives ⌘⇧3 and ⌘⇧4 back to macOS.
+
+## Performance
+
+Compared with Apple's own screenshot thumbnail, same three ⌘⇧3 screenshots, from keypress until the preview closes:
+
+| | Apple | Screenshot Clipboard | Change |
+|---|---:|---:|---:|
+| Memory | 53.2 MB | 41.9 MB | **−21%** |
+| CPU per screenshot | 0.22 s | 0.29 s | +34% |
+| Time running | 24.5 s | 18.6 s | −24% |
+
+It uses a bit more CPU because it starts fresh for each screenshot, but less memory, and it quits as soon as the preview closes. While idle, the background part uses about 6 MB and no CPU. [Full details](PERFORMANCE_AUDIT.md)
 
 ## Update
 
