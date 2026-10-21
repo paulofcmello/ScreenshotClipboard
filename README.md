@@ -4,6 +4,8 @@ Take a screenshot on your Mac and it's already on your clipboard. Just paste.
 
 It saves the file like normal and shows a small preview in the corner.
 
+**[Download](#download)** · **[Performance vs Apple's screenshots](PERFORMANCE_AUDIT.md)**
+
 ## Download
 
 1. Download **[ScreenshotClipboard.dmg](https://github.com/paulofcmello/ScreenshotClipboard/releases/latest/download/ScreenshotClipboard.dmg)**.
@@ -81,4 +83,4 @@ cd ScreenshotClipboard
 - It runs in the background with no Dock or menu bar icon, and nothing is uploaded.
 - Screenshots go to your usual screenshot folder as PNG files.
 
-Code is in `Sources/`; [performance notes](PERFORMANCE_AUDIT.md) and [older version](LEGACY.md) are kept for reference.
+Code is in `Sources/`; the [older version](LEGACY.md) is kept for reference.
