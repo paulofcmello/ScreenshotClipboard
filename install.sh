@@ -7,7 +7,17 @@ case "${1:-}" in
   # Reuses the existing build so the Screen Recording permission stays valid.
   --on) [[ -x build/active-app/ScreenshotClipboard.app/Contents/MacOS/capture ]] || zsh scripts/build-thumbnail.sh
         exec python3 scripts/activate-thumbnail.py ;;
-  --help) print 'Usage: ./install.sh [--restore | --off | --on]'; exit 0 ;;
+  # Takes effect on the next screenshot; no rebuild or restart.
+  --style) case "${2:-}" in
+      apple) defaults write local.screenshot-clipboard PreviewStyle native ;;
+      classic) defaults delete local.screenshot-clipboard PreviewStyle 2>/dev/null || true ;;
+      '') ;;
+      *) print -u2 'Usage: ./install.sh --style [apple | classic]'; exit 1 ;;
+    esac
+    [[ "$(defaults read local.screenshot-clipboard PreviewStyle 2>/dev/null)" == native ]] \
+      && print 'Preview style: apple' || print 'Preview style: classic'
+    exit 0 ;;
+  --help) print 'Usage: ./install.sh [--restore | --off | --on | --style [apple | classic]]'; exit 0 ;;
   '') ;;
   *) print -u2 'Unknown option. Use --help.'; exit 1 ;;
 esac

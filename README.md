@@ -32,6 +32,14 @@ Allow **ScreenshotClipboard** in **System Settings → Privacy & Security → Sc
 
 Both keep the installed app and settings. `--on` reuses the current build, so Screen Recording permission stays valid.
 
+Switch the preview look; it applies from the next screenshot:
+
+```sh
+./install.sh --style apple     # Apple-like thumbnail
+./install.sh --style classic   # original framed preview
+./install.sh --style           # show the current style
+```
+
 ## Restore the previous version
 
 ```sh
