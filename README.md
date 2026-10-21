@@ -23,6 +23,15 @@ Run as your normal user, without sudo. The installer builds and signs the app lo
 
 Allow **ScreenshotClipboard** in **System Settings → Privacy & Security → Screen & System Audio Recording** when prompted. Allow access to the save folder if requested. Then take a screenshot and try pasting while its preview remains visible.
 
+## Turn off and on
+
+```sh
+./install.sh --off   # stop the app and give ⌘⇧3/4 back to macOS
+./install.sh --on    # turn it back on
+```
+
+Both keep the installed app and settings. `--on` reuses the current build, so Screen Recording permission stays valid.
+
 ## Restore the previous version
 
 ```sh

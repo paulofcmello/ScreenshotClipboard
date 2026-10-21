@@ -48,6 +48,11 @@ if args.contains("--help") {
     exit(0)
 }
 
+// `defaults write local.screenshot-clipboard PreviewStyle native` approximates Apple's
+// floating thumbnail; `defaults delete local.screenshot-clipboard PreviewStyle` restores the default.
+let nativeStyle = UserDefaults.standard.string(forKey: "PreviewStyle") == "native"
+let padding: CGFloat = nativeStyle ? 4 : 5
+
 final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
     var thumbnail: NSImage?
     var file: URL?
@@ -63,6 +68,17 @@ final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
     var sliding = false
     var scrolling = false
     override func draw(_ dirtyRect: NSRect) {
+        if nativeStyle {
+            // Measured from Apple's thumbnail: ~4pt black frame with 5pt corners,
+            // image edged by a 1pt light line.
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+            let image = bounds.insetBy(dx: padding, dy: padding)
+            thumbnail?.draw(in: image)
+            NSColor(white: 0.85, alpha: 1).setStroke()
+            let edge = NSBezierPath(rect: image.insetBy(dx: 0.5, dy: 0.5)); edge.lineWidth = 1; edge.stroke()
+            return
+        }
         NSColor.windowBackgroundColor.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 10, yRadius: 10).fill()
         thumbnail?.draw(in: bounds.insetBy(dx: 5, dy: 5))
@@ -93,7 +109,7 @@ final class PreviewView: NSView, NSDraggingSource, NSMenuDelegate {
         guard let file, let thumbnail else { return }
         dragging = true
         let item = NSDraggingItem(pasteboardWriter: file as NSURL)
-        item.setDraggingFrame(bounds.insetBy(dx: 5, dy: 5), contents: thumbnail)
+        item.setDraggingFrame(bounds.insetBy(dx: padding, dy: padding), contents: thumbnail)
         beginDraggingSession(with: [item], event: event, source: self)
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
@@ -181,11 +197,13 @@ final class Prototype: NSObject, NSApplicationDelegate {
                 kCGImageSourceThumbnailMaxPixelSize: 440,
                 kCGImageSourceShouldCacheImmediately: true
             ] as CFDictionary) else { fail("Cannot make preview"); return }
-            let scale = min(220 / CGFloat(cg.width), 160 / CGFloat(cg.height))
-            let width = CGFloat(cg.width) * scale + 10
-            let height = CGFloat(cg.height) * scale + 10
+            let fit = nativeStyle ? NSSize(width: 146, height: 95) : NSSize(width: 220, height: 160)
+            let scale = min(fit.width / CGFloat(cg.width), fit.height / CGFloat(cg.height))
+            let width = CGFloat(cg.width) * scale + padding * 2
+            let height = CGFloat(cg.height) * scale + padding * 2
             let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1000, height: 700)
-            let rect = NSRect(x: screen.maxX - width - 26, y: screen.minY + 26, width: width, height: height)
+            let margin = nativeStyle ? NSSize(width: 12, height: 13) : NSSize(width: 26, height: 26)
+            let rect = NSRect(x: screen.maxX - width - margin.width, y: screen.minY + margin.height, width: width, height: height)
             let window = NSPanel(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.level = .floating
@@ -195,7 +213,7 @@ final class Prototype: NSObject, NSApplicationDelegate {
             window.hasShadow = true
             window.sharingType = .none
             let view = PreviewView(frame: NSRect(origin: .zero, size: rect.size))
-            view.thumbnail = NSImage(cgImage: cg, size: NSSize(width: width - 10, height: height - 10))
+            view.thumbnail = NSImage(cgImage: cg, size: NSSize(width: width - padding * 2, height: height - padding * 2))
             view.file = file
             view.toolTip = "Drag to copy the file. Double-click to open. Swipe right to dismiss."
             view.onOpen = { [weak self] in NSWorkspace.shared.open(file); self?.dismiss() }
@@ -205,7 +223,16 @@ final class Prototype: NSObject, NSApplicationDelegate {
             view.onRelease = { [weak self] in self?.scheduleDismissal() }
             window.contentView = view
             panel = window
-            window.orderFrontRegardless()
+            if nativeStyle, !args.contains("--render-preview") {
+                // Slide in from the right edge, as Apple's thumbnail does.
+                window.setFrameOrigin(NSPoint(x: screen.maxX + 10, y: rect.minY))
+                window.orderFrontRegardless()
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.3
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    window.animator().setFrame(rect, display: true)
+                }
+            } else { window.orderFrontRegardless() }
             if let path = option("--render-preview"), let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                 view.cacheDisplay(in: view.bounds, to: bitmap)
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
@@ -221,7 +248,12 @@ final class Prototype: NSObject, NSApplicationDelegate {
     func scheduleDismissal() {
         guard panel != nil else { return }
         dismissal?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.dismiss() }
+        let work = DispatchWorkItem { [weak self] in
+            guard nativeStyle, let view = self?.panel?.contentView as? PreviewView, !view.dragging else {
+                self?.dismiss(); return
+            }
+            view.swipe = .greatestFiniteMagnitude; view.settle()
+        }
         dismissal = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
     }

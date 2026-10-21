@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Activate the built thumbnail app; --restore reverses this activation."""
+"""Activate the built thumbnail app; --restore reverses this activation; --off stops it
+and gives ⌘⇧3/4 back to macOS until the next activation."""
 import os, pathlib, plistlib, shutil, subprocess, sys, time
 home = pathlib.Path.home()
 base = home / 'Library/Application Support/ScreenshotClipboard'
@@ -31,6 +32,13 @@ def restore():
     print('Previous app and shortcuts restored.')
 if '--restore' in sys.argv:
     restore(); sys.exit(0)
+if '--off' in sys.argv:
+    run('/bin/launchctl', 'disable', service)
+    stop()
+    current = keys()
+    set_keys({k: dict(current[k], enabled=True) for k in ('28','30') if k in current})
+    print('Off: app stopped and kept from starting at login; native screenshot shortcuts restored.')
+    sys.exit(0)
 source = pathlib.Path(__file__).resolve().parent.parent / 'build/active-app/ScreenshotClipboard.app'
 assert (source / 'Contents/MacOS/capture').is_file(), 'Build the app first'
 current = keys()
@@ -53,6 +61,7 @@ try:
         'ProgramArguments':[str(app / 'Contents/MacOS/screenshot-clipboard'), '--ready-file', str(ready)],
         'RunAtLoad':True, 'KeepAlive':True, 'ThrottleInterval':10,
         'StandardOutPath':'/dev/null', 'StandardErrorPath':str(base / 'thumbnail-error.log')}))
+    run('/bin/launchctl', 'enable', service)
     run('/bin/launchctl', 'bootstrap', f'gui/{os.getuid()}', agent)
     for _ in range(30):
         if ready.exists(): break
