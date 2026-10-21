@@ -26,7 +26,15 @@ from pathlib import Path
 info = {'CFBundleIdentifier':'local.screenshot-clipboard.settings','CFBundleName':'Screenshot Clipboard',
         'CFBundleExecutable':'settings','CFBundlePackageType':'APPL',
         'CFBundleShortVersionString':'2.0','CFBundleVersion':'2',
-        'LSMinimumSystemVersion':'13.0','NSHighResolutionCapable':True}
+        'LSMinimumSystemVersion':'13.0','NSHighResolutionCapable':True,
+        'CFBundleIconFile':'AppIcon'}
 Path('build/settings-app/Screenshot Clipboard.app/Contents/Info.plist').write_bytes(plistlib.dumps(info))
 PY
+iconset=build/AppIcon.iconset
+mkdir -p "$iconset" "$settings/Contents/Resources"
+for size in 16 32 128 256 512; do
+  sips -z $size $size Resources/AppIcon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size * 2)) $((size * 2)) Resources/AppIcon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$settings/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$settings"
