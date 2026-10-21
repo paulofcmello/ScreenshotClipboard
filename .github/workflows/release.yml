@@ -1,0 +1,21 @@
+# Pushing a tag like v2.0.0 builds the app on a GitHub Mac and publishes the DMG.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: VERSION="${GITHUB_REF_NAME#v}" zsh scripts/build-app.sh
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/ScreenshotClipboard.dmg \
+            --title "Screenshot Clipboard $GITHUB_REF_NAME" \
+            --notes "Download **ScreenshotClipboard.dmg** below, open it and drag the app into Applications. See the README for the one-time Open Anyway step."

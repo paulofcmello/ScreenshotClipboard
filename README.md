@@ -4,18 +4,21 @@ Take a screenshot on your Mac and it's already on your clipboard. Just paste.
 
 It saves the file like normal and shows a small preview in the corner.
 
-## Install
+## Download
 
-You need macOS, Python 3 and Apple's command line tools. Install the tools with `xcode-select --install` if you don't have them.
+1. Download **[ScreenshotClipboard.dmg](https://github.com/paulofcmello/ScreenshotClipboard/releases/latest/download/ScreenshotClipboard.dmg)**.
+2. Open it and drag **Screenshot Clipboard** into **Applications**.
+3. Open **Screenshot Clipboard** from Applications.
 
-```sh
-git clone https://github.com/paulofcmello/ScreenshotClipboard.git
-cd ScreenshotClipboard
-./install.sh
-```
+The first time, macOS says it can't verify the app, because it isn't from a paid Apple developer account. To allow it once:
 
-Then take a screenshot. When macOS asks, allow **ScreenshotClipboard** in
-**System Settings → Privacy & Security → Screen & System Audio Recording**.
+- Click **Done**.
+- Go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
+- Open the app again and confirm.
+
+The app turns itself on. Take a screenshot, and when macOS asks, allow **ScreenshotClipboard** in **Screen & System Audio Recording**.
+
+Works on macOS 13 or newer, on Apple Silicon and Intel Macs.
 
 ## Use
 
@@ -36,33 +39,34 @@ It also closes by itself after 5 seconds. ⌘⇧5 still opens Apple's own screen
 
 ## Settings
 
-Open **Screenshot Clipboard** from Spotlight or `~/Applications` to turn it on or off and pick the preview look. The window only runs while it's open.
+Open **Screenshot Clipboard** to turn it on or off and pick the preview look (Apple or Classic). The window only runs while it's open; screenshots keep working after you close it.
 
-## Commands
-
-The same settings from Terminal, run from the `ScreenshotClipboard` folder.
-
-```sh
-./install.sh --off             # turn it off and give ⌘⇧3/4 back to macOS
-./install.sh --on              # turn it back on
-./install.sh --style apple     # preview looks like Apple's thumbnail
-./install.sh --style classic   # original preview look
-./install.sh --restore         # go back to the version before the preview
-```
+Turning it off gives ⌘⇧3 and ⌘⇧4 back to macOS.
 
 ## Update
 
-```sh
-git pull
-./install.sh
-```
+Download the new DMG and drag the app into Applications again, replacing the old one. Then open it once.
 
-After an update, macOS may ask for Screen Recording permission again. If it keeps asking, remove ScreenshotClipboard from the Screen Recording list, allow it again and run `./install.sh --on`.
+## Uninstall
+
+Open the app and turn it off, then move **Screenshot Clipboard** from Applications to the Trash.
+
+## Build from source
+
+Needs Apple's command line tools (`xcode-select --install`).
+
+```sh
+git clone https://github.com/paulofcmello/ScreenshotClipboard.git
+cd ScreenshotClipboard
+./install.sh                   # build and install to Applications
+./install.sh --off             # turn it off
+./install.sh --on              # turn it on
+./install.sh --style apple     # or: classic
+```
 
 ## Notes
 
-- It only runs in the background, with no Dock or menu bar icon, and nothing is uploaded.
+- It runs in the background with no Dock or menu bar icon, and nothing is uploaded.
 - Screenshots go to your usual screenshot folder as PNG files.
-- Tested on Apple Silicon with macOS 26.5.
 
 Code is in `Sources/`; [performance notes](PERFORMANCE_AUDIT.md) and [older version](LEGACY.md) are kept for reference.

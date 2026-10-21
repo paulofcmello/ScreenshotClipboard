@@ -2,6 +2,8 @@ import AppKit
 
 // Settings window: turn the app on/off and choose the preview look.
 // Runs only while open; the screenshot service is unaffected when it quits.
+// It also installs that service: the background app ships inside this bundle,
+// so a download needs no compiler, Python or Terminal.
 let label = "local.screenshot-clipboard"
 let domain = label as CFString
 let service = "gui/\(getuid())/\(label)"
@@ -35,10 +37,34 @@ func setNativeShortcuts(_ on: Bool) {
     run("/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings", ["-u"])
 }
 
+let helper = Bundle.main.bundleURL
+    .appendingPathComponent("Contents/Helpers/ScreenshotClipboard.app/Contents/MacOS/screenshot-clipboard")
+// macOS runs downloaded apps from a temporary copy until they are moved with Finder.
+let translocated = Bundle.main.bundlePath.contains("/AppTranslocation/")
+
+func agentPlist() -> Data? {
+    let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/ScreenshotClipboard.log")
+    return try? PropertyListSerialization.data(fromPropertyList: [
+        "Label": label, "ProgramArguments": [helper.path],
+        "RunAtLoad": true, "KeepAlive": true, "ThrottleInterval": 10,
+        "StandardOutPath": "/dev/null", "StandardErrorPath": log.path,
+    ] as [String: Any], format: .xml, options: 0)
+}
+
+// True when the service runs a different copy of the app (moved or updated).
+func agentIsStale() -> Bool { (try? Data(contentsOf: agent)) != agentPlist() }
+
 func setEnabled(_ on: Bool) {
     if on {
+        guard !translocated, FileManager.default.isExecutableFile(atPath: helper.path), let plist = agentPlist() else { return }
+        // The user already approved this app on first open; clear the download flag on
+        // its own files so launchd can start the background part without another prompt.
+        run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", Bundle.main.bundlePath])
         setNativeShortcuts(false)
+        try? FileManager.default.createDirectory(at: agent.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? plist.write(to: agent)
         run("/bin/launchctl", ["enable", service])
+        run("/bin/launchctl", ["bootout", service])
         run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", agent.path])
     } else {
         run("/bin/launchctl", ["disable", service])
@@ -126,6 +152,14 @@ final class Settings: NSObject, NSApplicationDelegate {
         window.contentView = content
         window.isReleasedWhenClosed = false
         window.isRestorable = false
+        if translocated {
+            enabled.isEnabled = false
+            grid.cell(atColumnIndex: 1, rowIndex: 1).contentView = note(
+                "Drag Screenshot Clipboard into your Applications folder, then open it from there.")
+        } else if !FileManager.default.fileExists(atPath: agent.path) || (isEnabled() && agentIsStale()) {
+            // First launch turns it on; after a move or update, point the service at this copy.
+            setEnabled(true)
+        }
         refresh()
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -143,6 +177,24 @@ final class Settings: NSObject, NSApplicationDelegate {
     }
     @objc func toggleEnabled() { setEnabled(enabled.state == .on); refresh() }
     @objc func chooseStyle(_ sender: NSButton) { setAppleStyle(sender === apple); refresh() }
+}
+
+// Command-line use, e.g. from install.sh: --on, --off, --style apple|classic, --status.
+let args = Array(CommandLine.arguments.dropFirst()).filter { !$0.hasPrefix("-psn") }
+if let command = args.first {
+    switch command {
+    case "--on": setEnabled(true)
+    case "--off": setEnabled(false)
+    case "--style":
+        if args.count > 1 {
+            guard ["apple", "classic"].contains(args[1]) else { fputs("Usage: --style apple|classic\n", stderr); exit(64) }
+            setAppleStyle(args[1] == "apple")
+        }
+    case "--status": break
+    default: fputs("Usage: --on | --off | --style [apple|classic] | --status\n", stderr); exit(64)
+    }
+    print("Enabled: \(isEnabled() ? "yes" : "no")\nPreview style: \(appleStyle() ? "apple" : "classic")")
+    exit(0)
 }
 
 let app = NSApplication.shared
