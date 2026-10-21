@@ -40,6 +40,8 @@ if '--off' in sys.argv:
     print('Off: app stopped and kept from starting at login; native screenshot shortcuts restored.')
     sys.exit(0)
 source = pathlib.Path(__file__).resolve().parent.parent / 'build/active-app/ScreenshotClipboard.app'
+settings_source = source.parent.parent / 'settings-app/Screenshot Clipboard.app'
+settings_app = home / 'Applications/Screenshot Clipboard.app'
 assert (source / 'Contents/MacOS/capture').is_file(), 'Build the app first'
 current = keys()
 assert all(k in current for k in ('28', '30')), 'Expected screenshot shortcuts not found; no changes made'
@@ -55,6 +57,10 @@ try:
     if ready.exists(): ready.unlink()
     if app.exists(): shutil.rmtree(app)
     shutil.copytree(source, app)
+    if settings_source.exists():
+        if settings_app.exists(): shutil.rmtree(settings_app)
+        settings_app.parent.mkdir(exist_ok=True)
+        shutil.copytree(settings_source, settings_app)
     set_keys({k: dict(current[k], enabled=False) for k in ('28','30')})
     agent.parent.mkdir(parents=True, exist_ok=True)
     agent.write_bytes(plistlib.dumps({'Label':'local.screenshot-clipboard',

@@ -34,9 +34,13 @@ The preview:
 
 It also closes by itself after 5 seconds. ⌘⇧5 still opens Apple's own screenshot tool.
 
+## Settings
+
+Open **Screenshot Clipboard** from Spotlight or `~/Applications` to turn it on or off and pick the preview look. The window only runs while it's open.
+
 ## Commands
 
-Run these from the `ScreenshotClipboard` folder.
+The same settings from Terminal, run from the `ScreenshotClipboard` folder.
 
 ```sh
 ./install.sh --off             # turn it off and give ⌘⇧3/4 back to macOS
